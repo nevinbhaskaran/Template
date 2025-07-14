@@ -1,0 +1,12 @@
+/Users/nevinbhaskaran/Projects/PDS.PSP/src/Shared/PSP.Shared.Domain/bin/Debug/net9.0/PSP.Shared.Domain.deps.json
+/Users/nevinbhaskaran/Projects/PDS.PSP/src/Shared/PSP.Shared.Domain/bin/Debug/net9.0/PSP.Shared.Domain.dll
+/Users/nevinbhaskaran/Projects/PDS.PSP/src/Shared/PSP.Shared.Domain/bin/Debug/net9.0/PSP.Shared.Domain.pdb
+/Users/nevinbhaskaran/Projects/PDS.PSP/src/Shared/PSP.Shared.Domain/obj/Debug/net9.0/PSP.Shared.Domain.GeneratedMSBuildEditorConfig.editorconfig
+/Users/nevinbhaskaran/Projects/PDS.PSP/src/Shared/PSP.Shared.Domain/obj/Debug/net9.0/PSP.Shared.Domain.AssemblyInfoInputs.cache
+/Users/nevinbhaskaran/Projects/PDS.PSP/src/Shared/PSP.Shared.Domain/obj/Debug/net9.0/PSP.Shared.Domain.AssemblyInfo.cs
+/Users/nevinbhaskaran/Projects/PDS.PSP/src/Shared/PSP.Shared.Domain/obj/Debug/net9.0/PSP.Shared.Domain.csproj.CoreCompileInputs.cache
+/Users/nevinbhaskaran/Projects/PDS.PSP/src/Shared/PSP.Shared.Domain/obj/Debug/net9.0/PSP.Shared.Domain.sourcelink.json
+/Users/nevinbhaskaran/Projects/PDS.PSP/src/Shared/PSP.Shared.Domain/obj/Debug/net9.0/PSP.Shared.Domain.dll
+/Users/nevinbhaskaran/Projects/PDS.PSP/src/Shared/PSP.Shared.Domain/obj/Debug/net9.0/refint/PSP.Shared.Domain.dll
+/Users/nevinbhaskaran/Projects/PDS.PSP/src/Shared/PSP.Shared.Domain/obj/Debug/net9.0/PSP.Shared.Domain.pdb
+/Users/nevinbhaskaran/Projects/PDS.PSP/src/Shared/PSP.Shared.Domain/obj/Debug/net9.0/ref/PSP.Shared.Domain.dll

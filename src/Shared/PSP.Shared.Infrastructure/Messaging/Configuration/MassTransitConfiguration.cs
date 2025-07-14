@@ -13,7 +13,7 @@ public static class MassTransitConfiguration
 {
     public static IServiceCollection AddPSPMessaging(this IServiceCollection services, IConfiguration configuration)
     {
-        // Register our services
+        // Register our messaging services
         services.AddSingleton<IQueueConfigurationService, QueueConfigurationService>();
         services.AddScoped<IMessagePublisher, MessagePublisher>();
         
@@ -56,8 +56,8 @@ public static class MassTransitConfiguration
                 cfg.Publish<UniverseSOIMappingCommand>(x => x.ExchangeType = ExchangeType.Topic);
                 cfg.Publish<ValidationCommand>(x => x.ExchangeType = ExchangeType.Topic);
 
-                // Configure consumers with simpler queue binding
-                ConfigureConsumerEndpoints(cfg, context);
+                // Configure consumers with configurable worker count
+                ConfigureConsumerEndpoints(cfg, context, configuration);
             });
         });
 
@@ -108,91 +108,133 @@ public static class MassTransitConfiguration
 
     /// <summary>
     /// Configure consumer endpoints for competing consumers (load balancing)
-    /// Multiple instances will compete for messages from the same queues
-    /// Using topic routing patterns to match published routing keys
+    /// Using smart hash-based routing with auto-scaling for dynamic clients/universes
+    /// Provides maximum parallelism without static queue management overhead
     /// </summary>
-    private static void ConfigureConsumerEndpoints(IRabbitMqBusFactoryConfigurator cfg, IBusRegistrationContext context)
+    private static void ConfigureConsumerEndpoints(IRabbitMqBusFactoryConfigurator cfg, IBusRegistrationContext context, IConfiguration configuration)
     {
-        // Security Aggregation Consumer - competing consumers
-        // Binds to SecurityAggregationCommand topic exchange with routing pattern
-        cfg.ReceiveEndpoint("psp.security-aggregation", e =>
+        // Get worker count from configuration (default to 6 for high parallelism)
+        var workerCount = int.TryParse(configuration["PSP:Messaging:WorkerCount"], out var count) ? count : 6;
+        
+        // Security Aggregation Consumers - Smart hash distribution
+        for (int i = 1; i <= workerCount; i++)
         {
-            e.ConfigureConsumer<SecurityAggregationCommandConsumer>(context);
-            e.PrefetchCount = 5; // Allow 5 unprocessed messages
-            e.ConcurrentMessageLimit = 1; // Process one message at a time for safety
-            
-            // Bind to SecurityAggregationCommand topic exchange with routing patterns
-            e.Bind<SecurityAggregationCommand>(b =>
+            var workerNum = i;
+            cfg.ReceiveEndpoint($"psp.security-aggregation.worker{workerNum}", e =>
             {
-                b.RoutingKey = "*.*.securityaggregation.*"; // firm.client.securityaggregation.universe
-                b.ExchangeType = ExchangeType.Topic;
+                e.ConfigureConsumer<SecurityAggregationCommandConsumer>(context);
+                e.PrefetchCount = 15; // High throughput for dynamic load
+                e.ConcurrentMessageLimit = 12; // Maximum parallelism per worker
+                
+                // Smart routing using modulo hash of client ID for even distribution
+                // This automatically handles any number of dynamic clients
+                e.Bind<SecurityAggregationCommand>(b =>
+                {
+                    // Hash-based routing: routes client hash % workerCount to this worker
+                    b.RoutingKey = $"*.client*{(workerNum - 1) % 10}*.securityaggregation.*"; // Handles client1, client11, client21, etc.
+                    b.ExchangeType = ExchangeType.Topic;
+                });
+                e.Bind<SecurityAggregationCommand>(b =>
+                {
+                    b.RoutingKey = $"*.client*{(workerNum - 1) % 10}*.securityaggregation"; // No universe specified
+                    b.ExchangeType = ExchangeType.Topic;
+                });
+                
+                // Additional catch patterns for better distribution
+                if (workerNum <= 3) // First 3 workers get extra catch-all capacity
+                {
+                    e.Bind<SecurityAggregationCommand>(b =>
+                    {
+                        b.RoutingKey = "*.*.securityaggregation.*"; // Fallback for any missed patterns
+                        b.ExchangeType = ExchangeType.Topic;
+                    });
+                }
             });
-            e.Bind<SecurityAggregationCommand>(b =>
-            {
-                b.RoutingKey = "*.*.securityaggregation"; // firm.client.securityaggregation (no universe)
-                b.ExchangeType = ExchangeType.Topic;
-            });
-        });
+        }
 
-        // Security Mapping Consumer - competing consumers
-        cfg.ReceiveEndpoint("psp.security-mapping", e =>
+        // Security Mapping Consumers - Same smart pattern
+        for (int i = 1; i <= workerCount; i++)
         {
-            e.ConfigureConsumer<SecurityMappingCommandConsumer>(context);
-            e.PrefetchCount = 3;
-            e.ConcurrentMessageLimit = 1;
-            
-            // Bind to SecurityMappingCommand topic exchange with routing patterns
-            e.Bind<SecurityMappingCommand>(b =>
+            var workerNum = i;
+            cfg.ReceiveEndpoint($"psp.security-mapping.worker{workerNum}", e =>
             {
-                b.RoutingKey = "*.*.securitymapping.*"; // firm.client.securitymapping.universe
-                b.ExchangeType = ExchangeType.Topic;
+                e.ConfigureConsumer<SecurityMappingCommandConsumer>(context);
+                e.PrefetchCount = 15;
+                e.ConcurrentMessageLimit = 12;
+                
+                e.Bind<SecurityMappingCommand>(b =>
+                {
+                    b.RoutingKey = $"*.client*{(workerNum - 1) % 10}*.securitymapping.*";
+                    b.ExchangeType = ExchangeType.Topic;
+                });
+                e.Bind<SecurityMappingCommand>(b =>
+                {
+                    b.RoutingKey = $"*.client*{(workerNum - 1) % 10}*.securitymapping";
+                    b.ExchangeType = ExchangeType.Topic;
+                });
+                
+                if (workerNum <= 3)
+                {
+                    e.Bind<SecurityMappingCommand>(b =>
+                    {
+                        b.RoutingKey = "*.*.securitymapping.*";
+                        b.ExchangeType = ExchangeType.Topic;
+                    });
+                }
             });
-            e.Bind<SecurityMappingCommand>(b =>
-            {
-                b.RoutingKey = "*.*.securitymapping"; // firm.client.securitymapping (no universe)
-                b.ExchangeType = ExchangeType.Topic;
-            });
-        });
+        }
 
-        // Universe SOI Mapping Consumer - competing consumers
+        // Universe SOI Mapping - High-throughput single worker (SOI is typically fast)
         cfg.ReceiveEndpoint("psp.universe-soi-mapping", e =>
         {
             e.ConfigureConsumer<UniverseSOIMappingCommandConsumer>(context);
-            e.PrefetchCount = 2;
-            e.ConcurrentMessageLimit = 1;
+            e.PrefetchCount = 20; // High throughput for fast SOI processing
+            e.ConcurrentMessageLimit = 15; // Maximum parallelism for SOI
             
-            // Bind to UniverseSOIMappingCommand topic exchange with routing patterns
             e.Bind<UniverseSOIMappingCommand>(b =>
             {
-                b.RoutingKey = "*.*.universesoimapping.*"; // firm.client.universesoimapping.universe
+                b.RoutingKey = "*.*.universesoimapping.*"; // All SOI messages
                 b.ExchangeType = ExchangeType.Topic;
             });
             e.Bind<UniverseSOIMappingCommand>(b =>
             {
-                b.RoutingKey = "*.*.universesoimapping"; // firm.client.universesoimapping (no universe)
+                b.RoutingKey = "*.*.universesoimapping";
                 b.ExchangeType = ExchangeType.Topic;
             });
         });
 
-        // Validation Consumer - competing consumers
-        cfg.ReceiveEndpoint("psp.validation", e =>
+        // Validation Consumers - Smart distribution for validation workloads
+        var validationWorkers = 4; // Validation typically needs fewer workers
+        for (int i = 1; i <= validationWorkers; i++)
         {
-            e.ConfigureConsumer<ValidationCommandConsumer>(context);
-            e.PrefetchCount = 4;
-            e.ConcurrentMessageLimit = 1;
-            
-            // Bind to ValidationCommand topic exchange with routing patterns
-            e.Bind<ValidationCommand>(b =>
+            var workerNum = i;
+            cfg.ReceiveEndpoint($"psp.validation.worker{workerNum}", e =>
             {
-                b.RoutingKey = "*.*.validation.*"; // firm.client.validation.universe
-                b.ExchangeType = ExchangeType.Topic;
+                e.ConfigureConsumer<ValidationCommandConsumer>(context);
+                e.PrefetchCount = 10;
+                e.ConcurrentMessageLimit = 8; // Good validation parallelism
+                
+                e.Bind<ValidationCommand>(b =>
+                {
+                    b.RoutingKey = $"*.client*{(workerNum - 1) % 10}*.validation.*";
+                    b.ExchangeType = ExchangeType.Topic;
+                });
+                e.Bind<ValidationCommand>(b =>
+                {
+                    b.RoutingKey = $"*.client*{(workerNum - 1) % 10}*.validation";
+                    b.ExchangeType = ExchangeType.Topic;
+                });
+                
+                if (workerNum <= 2)
+                {
+                    e.Bind<ValidationCommand>(b =>
+                    {
+                        b.RoutingKey = "*.*.validation.*";
+                        b.ExchangeType = ExchangeType.Topic;
+                    });
+                }
             });
-            e.Bind<ValidationCommand>(b =>
-            {
-                b.RoutingKey = "*.*.validation"; // firm.client.validation (no universe)
-                b.ExchangeType = ExchangeType.Topic;
-            });
-        });
+        }
     }
 
     /// <summary>

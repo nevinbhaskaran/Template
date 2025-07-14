@@ -16,6 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\PSP.Shared.Domain\PSP.Shared.Domain.csproj" />
     <ProjectReference Include="..\PSP.Template.Contracts\PSP.Template.Contracts.csproj" />
   </ItemGroup>
 
