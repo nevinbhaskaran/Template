@@ -1,0 +1,19 @@
+{
+  "profiles": {
+    "PSP.Template.Worker": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ConnectionStrings__rabbitmq": "amqp://admin:admin123@localhost:5672/"
+      }
+    },
+    "PSP.Template.Worker (Aspire)": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
