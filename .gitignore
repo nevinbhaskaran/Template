@@ -379,7 +379,9 @@ test-results/
 
 # Mac bundle stuff
 *.dmg
-*.app
+# Only ignore macOS .app bundles (files), not project directories ending in .app
+/*.app
+!src/**
 
 # content below from: https://github.com/github/gitignore/blob/master/Global/macOS.gitignore
 # General
